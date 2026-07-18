@@ -4,6 +4,10 @@
   "title": "RoRender provider protocol v1 messages",
   "type": "object",
   "$defs": {
+    "requestDigest": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
     "imageSize": {
       "type": "object",
       "additionalProperties": false,
@@ -47,6 +51,7 @@
           "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$",
           "default": "map"
         },
+        "requestDigest": { "$ref": "#/$defs/requestDigest" },
         "projection": { "$ref": "#/$defs/projection" }
       }
     },
@@ -88,7 +93,8 @@
           "required": ["sessionId", "artifactName"],
           "properties": {
             "sessionId": { "type": "string", "format": "uuid" },
-            "artifactName": { "type": "string" }
+            "artifactName": { "type": "string" },
+            "requestDigest": { "$ref": "#/$defs/requestDigest" }
           }
         },
         "image": {
@@ -118,6 +124,7 @@
         "receivedPixels": { "type": "integer", "minimum": 0 },
         "totalPixels": { "type": "integer", "minimum": 1 },
         "progress": { "type": "number", "minimum": 0, "maximum": 1 },
+        "requestDigest": { "$ref": "#/$defs/requestDigest" },
         "projection": { "anyOf": [{ "$ref": "#/$defs/projection" }, { "type": "null" }] },
         "artifact": { "anyOf": [{ "$ref": "#/$defs/artifact" }, { "type": "null" }] }
       }

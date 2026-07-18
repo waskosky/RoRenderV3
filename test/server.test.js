@@ -9,6 +9,8 @@ const { loadConfig } = require("../lib/config");
 const { PNG_SIGNATURE } = require("../lib/png");
 const { createRenderServer } = require("../lib/server");
 
+const REQUEST_DIGEST = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+
 async function withServer(options, callback) {
   const outputDir = await fs.mkdtemp(path.join(os.tmpdir(), "rorender-server-test-"));
   const config = loadConfig({}, {
@@ -46,14 +48,31 @@ test("v1 HTTP lifecycle exposes compact receipts and completed image", async () 
 
     const capabilities = await json(await fetch(`${baseUrl}/v1/capabilities`));
     assert.equal(capabilities.body.pixelEncoding.id, "packed-rgba-u32-le");
+    assert.deepEqual(capabilities.body.requestBinding, {
+      createField: "requestDigest",
+      algorithm: "sha256",
+      encoding: "lowercase-hex",
+      statusEcho: true,
+      manifestPath: "render.requestDigest",
+      optional: true,
+    });
 
     const created = await json(await fetch(`${baseUrl}/v1/renders`, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ width: 2, height: 1, artifactName: "api-map" }),
+      body: JSON.stringify({
+        width: 2,
+        height: 1,
+        artifactName: "api-map",
+        requestDigest: REQUEST_DIGEST,
+      }),
     }));
     assert.equal(created.response.status, 201);
+    assert.equal(created.body.requestDigest, REQUEST_DIGEST);
     const sessionId = created.body.sessionId;
+
+    const status = await json(await fetch(`${baseUrl}/v1/renders/${sessionId}`));
+    assert.equal(status.body.requestDigest, REQUEST_DIGEST);
 
     const appended = await json(await fetch(`${baseUrl}/v1/renders/${sessionId}/chunks`, {
       method: "POST",
@@ -73,6 +92,7 @@ test("v1 HTTP lifecycle exposes compact receipts and completed image", async () 
     assert.deepEqual(image.subarray(0, 8), PNG_SIGNATURE);
     const manifest = await json(await fetch(`${baseUrl}/v1/renders/${sessionId}/manifest`));
     assert.equal(manifest.body.protocol, "rorender.v1");
+    assert.equal(manifest.body.render.requestDigest, REQUEST_DIGEST);
     assert.equal(manifest.body.image.sha256, completed.body.artifact.sha256);
 
     const deleted = await fetch(`${baseUrl}/v1/renders/${sessionId}`, { method: "DELETE" });
@@ -122,6 +142,16 @@ test("invalid and non-contiguous input has stable machine-readable errors", asyn
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ width: 2, height: 1 }),
     }));
+    assert.equal(Object.hasOwn(created.body, "requestDigest"), false);
+
+    const invalidDigest = await json(await fetch(`${baseUrl}/v1/renders`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ width: 1, height: 1, requestDigest: "A".repeat(64) }),
+    }));
+    assert.equal(invalidDigest.response.status, 400);
+    assert.equal(invalidDigest.body.error.code, "INVALID_REQUEST_DIGEST");
+
     const response = await json(await fetch(`${baseUrl}/v1/renders/${created.body.sessionId}/chunks`, {
       method: "POST",
       headers: { "content-type": "application/json" },

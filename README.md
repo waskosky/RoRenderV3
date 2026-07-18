@@ -68,6 +68,12 @@ Read `GET /v1/capabilities` for negotiated limits and feature support. See
 [protocol/rorender-v1.schema.json](protocol/rorender-v1.schema.json) for the
 integration contract.
 
+New clients can optionally bind an externally consumed render to their
+caller-owned canonical render intent by sending a 64-character lowercase
+SHA-256 `requestDigest` when creating the session. The provider echoes it in
+status receipts and the completed map manifest; clients that omit it remain
+fully supported.
+
 ## Desktop preview
 
 Install development dependencies and start Electron:

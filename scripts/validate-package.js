@@ -18,6 +18,22 @@ assert.equal(fs.existsSync(path.join(root, "LICENSE")), true, "LICENSE is requir
 assert.equal(protocolSchema.$defs.createRender.type, "object", "Protocol schema must expose createRender");
 assert.equal(protocolSchema.$defs.pixelChunk.type, "object", "Protocol schema must expose pixelChunk");
 assert.equal(protocolSchema.$defs.mapManifest.type, "object", "Protocol schema must expose mapManifest");
+assert.equal(
+  protocolSchema.$defs.requestDigest.pattern,
+  "^[0-9a-f]{64}$",
+  "Protocol schema must constrain requestDigest to lowercase SHA-256 hex",
+);
+for (const digestProperty of [
+  protocolSchema.$defs.createRender.properties.requestDigest,
+  protocolSchema.$defs.renderStatus.properties.requestDigest,
+  protocolSchema.$defs.mapManifest.properties.render.properties.requestDigest,
+]) {
+  assert.equal(
+    digestProperty.$ref,
+    "#/$defs/requestDigest",
+    "Protocol request bindings must share the canonical requestDigest definition",
+  );
+}
 
 const forbiddenRuntimePackages = [
   "body-parser",

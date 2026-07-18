@@ -26,6 +26,7 @@ render and capability routes.
   "width": 1024,
   "height": 1024,
   "artifactName": "coastal-town",
+  "requestDigest": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
   "projection": {
     "plane": "xz",
     "north": "negative-z",
@@ -41,6 +42,19 @@ render and capability routes.
 
 `artifactName` is a logical stem, not a path. The provider appends a random
 session ID and never accepts a caller-controlled destination path.
+
+`requestDigest` is an optional request-binding value. When present, it must be
+the 64-character lowercase hexadecimal encoding of a SHA-256 digest. The
+provider treats the digest as opaque caller metadata: it validates and retains
+the exact value, echoes it in create and status receipts, and writes it to
+`render.requestDigest` in the completed manifest. A consumer admitting an
+externally completed session should compare that value with its independently
+computed expected request digest before accepting the artifact. Canonicalization
+of the caller-owned render intent is deliberately outside the provider
+protocol; clients must use the same stable input on creation and admission.
+Existing clients may omit the field; omitted values are not added to receipts
+or manifests. Discovery exposes this contract under `requestBinding` in `GET
+/v1/capabilities`.
 
 Projection metadata is optional but strongly recommended for a map provider.
 The only currently supported plane is Roblox `xz`. `north: negative-z` maps
@@ -73,9 +87,9 @@ provider writes:
 - `<artifact>-<session>.png`
 - `<artifact>-<session>.map.json`
 
-The sidecar includes image dimensions, SHA-256, projection bounds, north
-orientation, and affine world-to-pixel coefficients. The coefficients map an
-in-world `(x, z)` location to a top-left pixel location:
+The sidecar includes image dimensions, image SHA-256, optional request binding,
+projection bounds, north orientation, and affine world-to-pixel coefficients.
+The coefficients map an in-world `(x, z)` location to a top-left pixel location:
 
 ```text
 pixelX = x * xScale + xOffset
@@ -99,7 +113,8 @@ UI implementation:
 1. Resolve experience bounds from the same world manifest used by generation.
 2. Start and admit the provider through health and capabilities checks.
 3. Ask the Studio adapter to sample the declared bounds and stream chunks.
-4. Verify the completion receipt, PNG SHA-256, and sidecar schema.
+4. Verify the completion receipt, request digest binding, PNG SHA-256, and
+   sidecar schema.
 5. Publish the PNG through RAI's separately authorized Roblox asset pipeline.
 6. Materialize the chosen map/minimap UI from a reusable experience template.
 7. Persist the Roblox asset ID and world-to-pixel transform in the experience

@@ -9,6 +9,8 @@ const { loadConfig } = require("../lib/config");
 const { PNG_SIGNATURE } = require("../lib/png");
 const { RenderSessionManager, projectionTransform } = require("../lib/render-session");
 
+const REQUEST_DIGEST = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+
 async function withManager(callback) {
   const outputDir = await fs.mkdtemp(path.join(os.tmpdir(), "rorender-session-test-"));
   const config = loadConfig({}, {
@@ -31,12 +33,15 @@ test("render session writes PNG and projection sidecar", async () => {
       width: 2,
       height: 1,
       artifactName: "town-map",
+      requestDigest: REQUEST_DIGEST,
       projection: {
         plane: "xz",
         north: "negative-z",
         bounds: { minX: -10, minZ: -20, maxX: 10, maxZ: 20 },
       },
     });
+    assert.equal(created.requestDigest, REQUEST_DIGEST);
+    assert.equal(manager.status(created.sessionId).requestDigest, REQUEST_DIGEST);
     const receipt = manager.append(created.sessionId, {
       offset: 0,
       pixels: [0x04030201, 0xfdfcfbfa],
@@ -54,6 +59,7 @@ test("render session writes PNG and projection sidecar", async () => {
       await fs.readFile(path.join(outputDir, completed.artifact.manifestFileName), "utf8"),
     );
     assert.equal(manifest.protocol, "rorender.v1");
+    assert.equal(manifest.render.requestDigest, REQUEST_DIGEST);
     assert.equal(manifest.image.sha256, completed.artifact.sha256);
     assert.deepEqual(manifest.projection.bounds, { minX: -10, minZ: -20, maxX: 10, maxZ: 20 });
     assert.equal(manifest.worldToPixel.coefficients.xScale, 0.05);
@@ -94,6 +100,23 @@ test("artifact names and render dimensions cannot become paths or memory abuse",
       () => manager.create({ width: "1", height: 1 }),
       (error) => error.code === "INVALID_RENDER_REQUEST",
     );
+  });
+});
+
+test("request bindings reject malformed digests while omitted bindings remain compatible", async () => {
+  await withManager(async (manager) => {
+    for (const requestDigest of [null, "a".repeat(63), "A".repeat(64), `sha256:${"a".repeat(64)}`]) {
+      assert.throws(
+        () => manager.create({ width: 1, height: 1, requestDigest }),
+        (error) => error.code === "INVALID_REQUEST_DIGEST",
+      );
+    }
+
+    const created = manager.create({ width: 1, height: 1 });
+    assert.equal(Object.hasOwn(created, "requestDigest"), false);
+    manager.append(created.sessionId, { offset: 0, pixels: [0xffffffff] });
+    await manager.complete(created.sessionId);
+    assert.equal(Object.hasOwn(manager.getManifest(created.sessionId).render, "requestDigest"), false);
   });
 });
 
