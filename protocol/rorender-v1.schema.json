@@ -1,0 +1,126 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/waskosky/RoRenderV3/protocol/rorender-v1.schema.json",
+  "title": "RoRender provider protocol v1 messages",
+  "type": "object",
+  "$defs": {
+    "imageSize": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["width", "height"],
+      "properties": {
+        "width": { "type": "integer", "minimum": 1 },
+        "height": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "bounds": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["minX", "minZ", "maxX", "maxZ"],
+      "properties": {
+        "minX": { "type": "number" },
+        "minZ": { "type": "number" },
+        "maxX": { "type": "number" },
+        "maxZ": { "type": "number" }
+      }
+    },
+    "projection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["bounds"],
+      "properties": {
+        "plane": { "const": "xz", "default": "xz" },
+        "north": { "enum": ["negative-z", "positive-z"], "default": "negative-z" },
+        "pixelOrigin": { "const": "top-left" },
+        "bounds": { "$ref": "#/$defs/bounds" }
+      }
+    },
+    "createRender": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["width", "height"],
+      "properties": {
+        "width": { "type": "integer", "minimum": 1 },
+        "height": { "type": "integer", "minimum": 1 },
+        "artifactName": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$",
+          "default": "map"
+        },
+        "projection": { "$ref": "#/$defs/projection" }
+      }
+    },
+    "pixelChunk": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["offset", "pixels"],
+      "properties": {
+        "offset": { "type": "integer", "minimum": 0 },
+        "pixels": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "integer", "minimum": -2147483648, "maximum": 4294967295 }
+        }
+      }
+    },
+    "artifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["imageFileName", "manifestFileName", "mediaType", "bytes", "sha256"],
+      "properties": {
+        "imageFileName": { "type": "string" },
+        "manifestFileName": { "type": "string" },
+        "mediaType": { "const": "image/png" },
+        "bytes": { "type": "integer", "minimum": 1 },
+        "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+      }
+    },
+    "mapManifest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "protocol", "render", "image", "projection", "worldToPixel", "completedAt"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "protocol": { "const": "rorender.v1" },
+        "render": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["sessionId", "artifactName"],
+          "properties": {
+            "sessionId": { "type": "string", "format": "uuid" },
+            "artifactName": { "type": "string" }
+          }
+        },
+        "image": {
+          "type": "object",
+          "required": ["fileName", "mediaType", "width", "height", "bytes", "sha256"],
+          "properties": {
+            "fileName": { "type": "string" },
+            "mediaType": { "const": "image/png" },
+            "width": { "type": "integer", "minimum": 1 },
+            "height": { "type": "integer", "minimum": 1 },
+            "bytes": { "type": "integer", "minimum": 1 },
+            "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+          }
+        },
+        "projection": { "anyOf": [{ "$ref": "#/$defs/projection" }, { "type": "null" }] },
+        "worldToPixel": { "type": ["object", "null"] },
+        "completedAt": { "type": "string", "format": "date-time" }
+      }
+    },
+    "renderStatus": {
+      "type": "object",
+      "required": ["sessionId", "state", "imageSize", "receivedPixels", "totalPixels", "progress"],
+      "properties": {
+        "sessionId": { "type": "string", "format": "uuid" },
+        "state": { "enum": ["receiving", "writing", "complete", "error"] },
+        "imageSize": { "$ref": "#/$defs/imageSize" },
+        "receivedPixels": { "type": "integer", "minimum": 0 },
+        "totalPixels": { "type": "integer", "minimum": 1 },
+        "progress": { "type": "number", "minimum": 0, "maximum": 1 },
+        "projection": { "anyOf": [{ "$ref": "#/$defs/projection" }, { "type": "null" }] },
+        "artifact": { "anyOf": [{ "$ref": "#/$defs/artifact" }, { "type": "null" }] }
+      }
+    }
+  }
+}

@@ -1,193 +1,56 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8"/>
-    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no"/>
-    <meta http-equiv="x-ua-compatible" content="ie=edge"/>
-    <title>RoRender</title>
-    <!-- MDB icon -->
-    <link rel="icon" href="img/mdb-favicon.ico" type="image/x-icon"/>
-    <!-- Font Awesome -->
-    <link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.11.2/css/all.css"/>
-    <!-- Google Fonts Roboto -->
-    <link
-            rel="stylesheet"
-            href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap"
-    />
-    <!-- MDB -->
-    <link rel="stylesheet" href="css/mdb.min.css"/>
-    <!-- Custom styles -->
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'">
+    <title>RoRenderV3</title>
+    <link rel="stylesheet" href="css/mdb.min.css">
     <link rel="stylesheet" href="css/custom.css">
+    <style>
+        body { background: #f4f6f8; }
+        .render-frame { aspect-ratio: 1 / 1; background: #dfe5ea; border-radius: 10px; overflow: hidden; position: relative; }
+        .render-frame img, .render-frame canvas { height: 100%; left: 0; object-fit: contain; position: absolute; top: 0; width: 100%; }
+        #serverStatus { min-height: 1.5rem; overflow-wrap: anywhere; }
+    </style>
+    <script defer src="renderer.js"></script>
 </head>
 <body>
-<!-- Start your project here-->
-<div class="container">
+<main class="container">
     <div class="row justify-content-center py-4">
-        <div class="col-md-7">
-            <div class="bg-image">
-                <img id="main-img" class="img-fluid" src="./img/grid.png" alt="" style="border-radius: 10px;">
-                <canvas id="render-preview" class="mask" src="./img/grid.png" alt="" style="border-radius: 10px;"></canvas>
+        <section class="col-md-7" aria-label="Render preview">
+            <div class="render-frame">
+                <img id="main-img" src="img/grid.png" alt="Empty render grid">
+                <canvas id="render-preview" aria-label="Orthographic map preview"></canvas>
             </div>
-            <button class="mt-4 btn-lg btn btn-white" id="help">Help</button>
-            <button class="mt-4 btn-lg btn btn-link float-end" id="exportImage" disabled>
-            <i class="fas fa-arrow-circle-down"></i>
-            Download Image</button>
-            <!--
-            <p class="d-inline-block lead float-end mt-4 fw-bold text-muted">Export Image</p>
-            -->
-
-        </div>
-        <div class="col-md-5">
+            <button class="mt-4 btn-lg btn btn-white" id="help" type="button">Help</button>
+            <button class="mt-4 btn-lg btn btn-link float-end" id="exportImage" type="button" disabled>
+                Save PNG
+            </button>
+        </section>
+        <section class="col-md-5" aria-label="Render status">
             <div class="card text-center mb-4">
                 <div class="card-body d-flex justify-content-center align-items-center">
-                    <div class="progress" data-percentage="0" id="datapercentage">
-                        <span class="progress-left">
-                            <span class="progress-bar"></span>
-                        </span>
-                        <span class="progress-right">
-                            <span class="progress-bar"></span>
-		                </span>
+                    <div class="progress" data-percentage="0" id="datapercentage" aria-label="Render progress">
+                        <span class="progress-left"><span class="progress-bar"></span></span>
+                        <span class="progress-right"><span class="progress-bar"></span></span>
                         <div class="progress-value">
-                            <div class="fw-bold" style="font-size: 42px;"id="datapercentagetext">
-                                0%
-                            </div>
+                            <div class="fw-bold" style="font-size: 42px" id="datapercentagetext">0%</div>
                         </div>
                     </div>
                 </div>
             </div>
             <div class="card text-center">
                 <div class="card-body d-flex justify-content-center align-items-center">
-                    <h1 style="font-size: 42px;"id="timer">00:00:00</h1>
+                    <h1 style="font-size: 42px" id="timer">00:00:00</h1>
                 </div>
             </div>
-            <button class="btn-lg btn btn-primary btn-block mt-4"id="startServer">Start Server</button>
-        </div>
+            <button class="btn-lg btn btn-primary btn-block mt-4" id="startServer" type="button">
+                Start local provider
+            </button>
+            <p class="text-muted mt-3" id="serverStatus" role="status">Ready to listen on loopback.</p>
+        </section>
     </div>
-</div>
-<!-- End your project here-->
+</main>
 </body>
-
-<!-- MDB -->
-<script type="text/javascript" src="js/jquery.min.js"></script>
-<script type="text/javascript" src="js/mdb.min.js"></script>
-<!-- Custom scripts -->
-<script type="text/javascript">
-    window.$ = window.jQuery = require('jquery');
-
-    const delay = ms => new Promise(res => setTimeout(res, ms));
-
-    let serverStarted = false;
-    let timerRunning = false;
-    if ($(window).width() > 600){
-        $('.card').css('height', ($('#main-img').height() / 2 - 12) + 'px');
-    }
-    // Button Events
-    const hiddenctx = document.createElement("canvas").getContext("2d");
-    let imageData
-
-    const previewctx = document.querySelector("#render-preview").getContext("2d");
-
-    let dataIndex = 0;
-
-    // include the ipc module to communicate with main process.
-        const ipcRenderer = require('electron').ipcRenderer; 
-    const ipcMain = require("electron").ipcMain;
-
-    // Render logic
-    ipcRenderer.on("render-begin", (e, imageSize) => {
-        startTimer()
-        hiddenctx.clearRect(0, 0, imageSize.x, imageSize.y);
-        previewctx.clearRect(0, 0, previewctx.canvas.width, previewctx.canvas.height);
-
-        hiddenctx.canvas.width = imageSize.x;
-        hiddenctx.canvas.height = imageSize.y;
-
-        imageData = new Uint8ClampedArray(imageSize.x * imageSize.y * 4);
-
-        dataIndex = 0;
-        console.log(e, imageSize)
-    })
-
-    function extractBits(number, position, width) {
-        return ((number >> position) & ((1 << width) - 1));
-    }
-
-    ipcRenderer.on("data", (e,data) => {
-        for (let index = 0; index < data.length; ++index) {
-            const rawValue = data[index];
-            const initialOffset = index + dataIndex
-            imageData[initialOffset] = extractBits(rawValue, 0, 8);
-            imageData[initialOffset + 1] = extractBits(rawValue, 8, 8);
-            imageData[initialOffset + 2] = extractBits(rawValue, 16, 8);
-            imageData[initialOffset + 3] = extractBits(rawValue, 24, 8);
-        }
-        dataIndex += data.length
-        updatePercentage()
-        const image = new ImageData(imageData, hiddenctx.canvas.width, hiddenctx.canvas.height);
-        hiddenctx.putImageData(image, 0, 0);
-        previewctx.drawImage(hiddenctx.canvas, 0, 0, previewctx.canvas.width, previewctx.canvas.height);
-    });
-
-
-    //help button
-    const helpClick = document.getElementById('help');
-    helpClick.addEventListener('click', function () {
-        var arg ="secondparam";
-        ipcRenderer.send("helpClick", arg);
-    });
-
-    //export image
-    const exportImage = document.getElementById('exportImage');
-    exportImage.addEventListener('click', function () {
-        ipcRenderer.send("exportImage", hiddenctx.canvas.toDataURL()); 
-    });
-
-    //Start server
-    const startServer = document.getElementById('startServer');
-    startServer.addEventListener('click', function () {
-        if (!serverStarted){
-            serverStarted = true;
-            var arg ="secondparam";
-
-            ipcRenderer.send("startServer", arg);
-            setTimeout(() => { startServer.disabled = true;},500);
-        }
-    });
-
-    const timer = document.getElementById('timer');
-    function startTimer() {
-        if (!timerRunning){
-            timerRunning = true;
-            var x = 0;
-            var check = function(){
-                if(!timerRunning){
-                    return true;
-                }
-                else {
-                    x = x + 1;
-                    var timeString = new Date(x * 1000).toISOString().substr(11, 8)
-                    timer.innerHTML = timeString;
-                    setTimeout(check, 1000); // check again in a second
-                }
-            }
-            check();
-        } 
-    };
-
-    const datapercentage = document.getElementById('datapercentage');
-    const datatextpercentage = document.getElementById('datapercentagetext');
-
-    function updatePercentage(){
-        console.log("update")
-        const percent = Math.round((dataIndex / imageData.length) * 100) 
-        console.log(percent)
-        datapercentage.setAttribute("data-percentage", percent)
-        datatextpercentage.innerHTML = percent.toString().concat("%");
-        if (percent == 100){
-            timerRunning = false;
-            exportImage.disabled = false;
-        }
-    }
-</script>
-
 </html>
